@@ -60,7 +60,8 @@ export async function setupNotificationListener(): Promise<boolean> {
  */
 async function setupExpoNotificationListener(): Promise<void> {
   // Configure how notifications are handled when the app is in the foreground
-  Notifications.setNotificationHandler({
+  try{
+    Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
       shouldPlaySound: true,
@@ -73,7 +74,9 @@ async function setupExpoNotificationListener(): Promise<void> {
     console.log('Notification received through Expo:', notification);
     addNotification(notification);
   });
-  
+}catch(error){
+  console.error('Error setting up notification listener:', error);
+}
   isListenerInitialized = true;
 }
 
@@ -85,15 +88,20 @@ export async function requestSystemNotificationListener(): Promise<boolean> {
     console.log('System notification listener is only available on Android');
     return false;
   }
-  
+  if (!NativeNotificationListener) {
+    console.error('NotificationListener module is not available');
+    return false;
+  }
   try {
+    console.log('Requesting notification listener permission');
     // Use the native module to request permission
     const result = await NativeNotificationListener.requestPermission();
-    
+    console.log('Permission request result:', result);
     // If permission was successfully requested (user was taken to settings)
     if (result) {
       // Check if the permission is now granted after the user returns
       const isEnabled = await NativeNotificationListener.isPermissionEnabled();
+      console.log('Permission enabled:', isEnabled);
       if (isEnabled) {
         // Start listening now that we have permission
         NativeNotificationListener.startListening();

@@ -321,7 +321,21 @@ const DashboardScreen = () => {
             {Platform.OS === 'android' && !isLoading && notifications.length === 0 && (
               <TouchableOpacity 
                 style={[styles.emptyButton, { backgroundColor: isDark ? "#6366f1" : "#4f46e5" }]}
-                onPress={async () => await requestSystemNotificationListener()}
+                onPress={async () => {
+                  console.log('Enable Notification Access button clicked');
+                  try {
+                      const result = await requestSystemNotificationListener();
+                      console.log('Permission request result:', result);
+                      if (result) {
+                          Alert.alert('Success', 'Notification access enabled!');
+                      } else {
+                          Alert.alert('Error', 'Failed to enable notification access.');
+                      }
+                  } catch (error) {
+                      console.error('Error requesting notification access:', error);
+                      Alert.alert('Error', 'An error occurred while requesting notification access.');
+                  }
+                }}
               >
                 <Text style={{ color: 'white' }}>Enable Notification Access</Text>
               </TouchableOpacity>

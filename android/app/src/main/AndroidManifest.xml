@@ -26,6 +26,7 @@
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="myapp"/>
         <data android:scheme="com.anonymous.notify"/>
+        <data android:scheme="exp+notify"/>
       </intent-filter>
     </activity>
   </application>

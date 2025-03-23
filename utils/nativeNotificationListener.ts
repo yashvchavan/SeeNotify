@@ -3,7 +3,9 @@ import { addNotification } from './notificationStore';
 import * as Notifications from 'expo-notifications';
 
 const { NotificationListener } = NativeModules;
-
+if (!NotificationListener) {
+  console.error('NotificationListener module is not available');
+}
 let notificationSubscription: EmitterSubscription | null = null;
 
 /**
@@ -64,14 +66,14 @@ export function startListening(): void {
       const notification = {
         date: event.postTime, // Use the timestamp directly as a number
         request: {
-          identifier: event.id,
+          identifier: event.id || 'unknown',
           content: {
-            title: event.title || null,
-            body: event.body || null,
-            subtitle: event.subText || null,
+            title: event.title || 'No Title',
+            body: event.body || 'No Body',
+            subtitle: event.subText || 'No Subtitle',
             data: {
-              appName: event.appName,
-              packageName: event.packageName
+              appName: event.appName || 'Unknown App',
+              packageName: event.packageName || 'unknown'
             },
             sound: 'default', // Add required sound property
           } as Notifications.NotificationContent, // Add type assertion
