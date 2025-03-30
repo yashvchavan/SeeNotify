@@ -20,8 +20,17 @@ import {
 } from "lucide-react-native"
 import { Swipeable } from "react-native-gesture-handler"
 import type { NavigationProp, Notification } from "../type"
-import { setupNotificationListener, requestSystemNotificationListener } from "../utils/notificationListener"
-import { getNotifications, markAsRead as markNotificationAsRead, deleteNotification as deleteStoredNotification } from "../utils/notificationStore"
+import { 
+  setupNotificationListener, 
+  requestSystemNotificationListener, 
+  checkNotificationListenerStatus,
+  cleanupNotificationListener
+} from "../utils/notificationListener"
+import { 
+  getNotifications, 
+  markAsRead as markNotificationAsRead, 
+  deleteNotification as deleteStoredNotification 
+} from "../utils/notificationStore"
 
 const { width } = Dimensions.get("window")
 
@@ -42,6 +51,7 @@ const DashboardScreen = () => {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const [permissionGranted, setPermissionGranted] = useState(false)
 
   const swipeableRefs = useRef<Array<Swipeable | null>>([])
 
@@ -49,12 +59,20 @@ const DashboardScreen = () => {
     const initNotifications = async () => {
       setIsLoading(true);
       try {
-        const listenerSetup = await setupNotificationListener();
+        // Check if permission is already granted
+        const listenerStatus = await checkNotificationListenerStatus();
+        setPermissionGranted(listenerStatus);
         
-        if (listenerSetup) {
-          console.log('Notification listener set up successfully');
+        if (listenerStatus) {
+          const listenerSetup = await setupNotificationListener();
+          
+          if (listenerSetup) {
+            console.log('Notification listener set up successfully');
+          } else {
+            console.log('Failed to set up notification listener');
+          }
         } else {
-          console.log('Failed to set up notification listener');
+          console.log('Notification permission not granted');
           
           if (Platform.OS === 'android') {
             Alert.alert(
@@ -64,7 +82,17 @@ const DashboardScreen = () => {
                 { text: 'Cancel', style: 'cancel' },
                 { 
                   text: 'Enable', 
-                  onPress: async () => await requestSystemNotificationListener() 
+                  onPress: async () => {
+                    await requestSystemNotificationListener();
+                    // We'll check the status again after a delay
+                    setTimeout(async () => {
+                      const newStatus = await checkNotificationListenerStatus();
+                      setPermissionGranted(newStatus);
+                      if (newStatus) {
+                        setupNotificationListener();
+                      }
+                    }, 1000);
+                  }
                 }
               ]
             );
@@ -85,6 +113,7 @@ const DashboardScreen = () => {
     
     return () => {
       clearInterval(refreshInterval);
+      cleanupNotificationListener();
     };
   }, []);
   
@@ -139,7 +168,7 @@ const DashboardScreen = () => {
             style={[styles.swipeAction, { backgroundColor: "#10b981" }]}
             onPress={() => {
               markAsRead(id)
-              const index = Number.parseInt(id) - 1
+              const index = notifications.findIndex(n => n.id === id);
               if (index >= 0 && index < swipeableRefs.current.length) {
                 swipeableRefs.current[index]?.close()
               }
@@ -156,12 +185,22 @@ const DashboardScreen = () => {
         </View>
       )
     },
-    [markAsRead, deleteNotification, isDark],
+    [markAsRead, deleteNotification, isDark, notifications],
   )
 
   const renderNotificationItem = useCallback(
     ({ item, index }: { item: Notification; index: number }) => {
-      const Icon = item.icon
+      // Determine which icon to use based on the category or default to Bell
+      const IconComponent = (() => {
+        switch(item.category) {
+          case 'important': return AlertCircle;
+          case 'work': return Calendar;
+          case 'social': return MessageSquare;
+          case 'promo': return Tag;
+          default: return Bell;
+        }
+      })();
+      
       const getTextColor = () => (isDark ? "#ffffff" : "#1e293b")
       const getSecondaryTextColor = () => (isDark ? "#a1a1aa" : "#64748b")
       const getCardBgColor = () => (isDark ? "#1e1e2e" : "#ffffff")
@@ -190,7 +229,7 @@ const DashboardScreen = () => {
                 ]}
               >
                 <View style={[styles.iconContainer, { backgroundColor: isDark ? "#2e2e3e" : "#f8fafc" }]}>
-                  <Icon size={20} color={isDark ? "#6366f1" : "#4f46e5"} />
+                  <IconComponent size={20} color={isDark ? "#6366f1" : "#4f46e5"} />
                 </View>
 
                 <View style={styles.notificationContent}>
@@ -316,9 +355,11 @@ const DashboardScreen = () => {
             <Text style={[styles.emptyText, { color: getSecondaryTextColor() }]}>
               {isLoading 
                 ? "Loading notifications..." 
-                : "No notifications found"}
+                : !permissionGranted
+                  ? "Notification access not granted"
+                  : "No notifications found"}
             </Text>
-            {Platform.OS === 'android' && !isLoading && notifications.length === 0 && (
+            {Platform.OS === 'android' && !isLoading && !permissionGranted && (
               <TouchableOpacity 
                 style={[styles.emptyButton, { backgroundColor: isDark ? "#6366f1" : "#4f46e5" }]}
                 onPress={async () => {
@@ -327,9 +368,18 @@ const DashboardScreen = () => {
                       const result = await requestSystemNotificationListener();
                       console.log('Permission request result:', result);
                       if (result) {
-                          Alert.alert('Success', 'Notification access enabled!');
+                          // We'll check the status again after a delay
+                          setTimeout(async () => {
+                            const newStatus = await checkNotificationListenerStatus();
+                            setPermissionGranted(newStatus);
+                            if (newStatus) {
+                              await setupNotificationListener();
+                              refreshNotifications();
+                              Alert.alert('Success', 'Notification access enabled!');
+                            }
+                          }, 1000);
                       } else {
-                          Alert.alert('Error', 'Failed to enable notification access.');
+                          Alert.alert('Action Required', 'Please enable notification access for this app in the settings screen that opened.');
                       }
                   } catch (error) {
                       console.error('Error requesting notification access:', error);
@@ -507,4 +557,3 @@ const styles = StyleSheet.create({
 })
 
 export default DashboardScreen
-

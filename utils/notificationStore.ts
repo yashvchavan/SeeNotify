@@ -1,161 +1,120 @@
-import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Notification } from '../type';
-import { Bell, Mail, MessageSquare, AlertCircle } from 'lucide-react-native';
+import type { Notification } from '../type';
 
-// Storage key for persisting notifications
-const STORAGE_KEY = 'seenotify_notifications';
+const NOTIFICATIONS_STORAGE_KEY = '@notifications';
+let cachedNotifications: Notification[] = [];
 
-// Keep track of notifications in memory
-let notifications: Notification[] = [];
-
-/**
- * Convert an Expo notification to our app's notification format
- */
-function convertNotification(notification: Notifications.Notification): Notification | null {
+// Load notifications from storage
+export const loadNotifications = async (): Promise<void> => {
   try {
-    const { request, date } = notification;
-    const { content } = request;
-    
-    // Skip notifications without content
-    if (!content.title && !content.body) {
-      return null;
+    const storedNotifications = await AsyncStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+    if (storedNotifications !== null) {
+      cachedNotifications = JSON.parse(storedNotifications);
     }
-
-    // Get app name from the notification or default to Unknown
-    const appName = content.data?.appName || content.data?.app || 'Unknown App';
-    
-    // Determine an appropriate icon based on app name or content
-    let icon = Bell;
-    const appLower = appName.toLowerCase();
-    
-    if (appLower.includes('mail') || appLower.includes('gmail') || appLower.includes('outlook')) {
-      icon = Mail;
-    } else if (appLower.includes('chat') || appLower.includes('message') || 
-               appLower.includes('whatsapp') || appLower.includes('telegram')) {
-      icon = MessageSquare;
-    }
-    
-    // Format the time
-    const timeDate = new Date(date);
-    const now = new Date();
-    
-    let timeString: string;
-    if (timeDate.toDateString() === now.toDateString()) {
-      // Today, show time
-      timeString = timeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (timeDate.getTime() > now.getTime() - 86400000) {
-      // Yesterday
-      timeString = 'Yesterday';
-    } else {
-      // Earlier
-      timeString = timeDate.toLocaleDateString();
-    }
-
-    return {
-      id: request.identifier,
-      app: appName,
-      title: content.title || '',
-      sender: content.subtitle || appName,
-      message: content.body || '',
-      time: timeString,
-      category: content.data?.category || 'all',
-      isRead: false,
-      icon: icon,
-      // Store the original date for sorting
-      receivedAt: new Date(date)
-    };
   } catch (error) {
-    console.error('Error converting notification:', error);
+    console.error('Error loading notifications from storage:', error);
+  }
+};
+
+// Initialize the store
+(async () => {
+  await loadNotifications();
+})();
+
+// Get all notifications (no need to wait for AsyncStorage)
+export const getNotifications = (): Notification[] => {
+  return [...cachedNotifications].sort((a, b) => {
+    // Convert time strings to Date objects for comparison
+    const getTimeValue = (timeStr: string): number => {
+      const [time, period] = timeStr.split(' ');
+      const [hours, minutes] = time.split(':').map(Number);
+      let value = hours * 60 + minutes;
+      if (period === 'PM' && hours !== 12) value += 12 * 60;
+      if (period === 'AM' && hours === 12) value -= 12 * 60;
+      return value;
+    };
+    
+    const timeA = getTimeValue(a.time);
+    const timeB = getTimeValue(b.time);
+    
+    // Sort by time descending (newest first)
+    return timeB - timeA;
+  });
+};
+
+// Define a partial notification type for input
+type PartialNotification = Partial<Notification> & { packageName?: string };
+
+// Save a new notification
+export const saveNotification = async (notification: PartialNotification): Promise<Notification | null> => {
+  try {
+    // Create a notification object with all required fields
+    const newNotification: Notification = {
+      id: notification.id || String(Date.now()),
+      app: notification.app || 'Unknown',
+      sender: notification.sender || 'Unknown',
+      message: notification.message || '',
+      time: notification.time || new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+      title: notification.title || '',
+      category: notification.category || 'all',
+      isRead: notification.isRead || false,
+      icon: notification.icon || 'Bell'
+    };
+    
+    // Add to cached notifications
+    cachedNotifications = [newNotification, ...cachedNotifications];
+    
+    // Limit the number of stored notifications (optional)
+    if (cachedNotifications.length > 100) {
+      cachedNotifications = cachedNotifications.slice(0, 100);
+    }
+    
+    // Save to AsyncStorage
+    await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(cachedNotifications));
+    
+    return newNotification;
+  } catch (error) {
+    console.error('Error saving notification:', error);
     return null;
   }
-}
+};
 
-/**
- * Initialize the notification store and load saved notifications
- */
-export async function initNotificationStore(): Promise<void> {
+// Mark a notification as read
+export const markAsRead = async (id: string): Promise<boolean> => {
   try {
-    const savedData = await AsyncStorage.getItem(STORAGE_KEY);
-    if (savedData) {
-      notifications = JSON.parse(savedData);
-      
-      // Convert string dates back to Date objects
-      notifications.forEach(notification => {
-        if (notification.receivedAt) {
-          notification.receivedAt = new Date(notification.receivedAt);
-        }
-      });
-      
-      console.log(`Loaded ${notifications.length} saved notifications`);
+    const index = cachedNotifications.findIndex(n => n.id === id);
+    if (index !== -1) {
+      cachedNotifications[index].isRead = true;
+      await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(cachedNotifications));
+      return true;
     }
+    return false;
   } catch (error) {
-    console.error('Error loading saved notifications:', error);
+    console.error('Error marking notification as read:', error);
+    return false;
   }
-}
+};
 
-/**
- * Save the current notifications to persistent storage
- */
-async function saveNotifications(): Promise<void> {
+// Delete a notification
+export const deleteNotification = async (id: string): Promise<boolean> => {
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
+    cachedNotifications = cachedNotifications.filter(n => n.id !== id);
+    await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(cachedNotifications));
+    return true;
   } catch (error) {
-    console.error('Error saving notifications:', error);
+    console.error('Error deleting notification:', error);
+    return false;
   }
-}
+};
 
-/**
- * Add a new notification to the store
- */
-export function addNotification(notification: Notifications.Notification): void {
-  const converted = convertNotification(notification);
-  
-  if (converted) {
-    // Add to the beginning of the array (newest first)
-    notifications = [converted, ...notifications];
-    
-    // Keep only the most recent 100 notifications
-    if (notifications.length > 100) {
-      notifications = notifications.slice(0, 100);
-    }
-    
-    // Save to persistent storage
-    saveNotifications();
+// Clear all notifications
+export const clearAllNotifications = async (): Promise<boolean> => {
+  try {
+    cachedNotifications = [];
+    await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(cachedNotifications));
+    return true;
+  } catch (error) {
+    console.error('Error clearing notifications:', error);
+    return false;
   }
-}
-
-/**
- * Get all stored notifications
- */
-export function getNotifications(): Notification[] {
-  return [...notifications];
-}
-
-/**
- * Mark a notification as read
- */
-export function markAsRead(id: string): void {
-  const notification = notifications.find(n => n.id === id);
-  if (notification) {
-    notification.isRead = true;
-    saveNotifications();
-  }
-}
-
-/**
- * Delete a notification
- */
-export function deleteNotification(id: string): void {
-  notifications = notifications.filter(n => n.id === id);
-  saveNotifications();
-}
-
-/**
- * Clear all notifications
- */
-export function clearAllNotifications(): void {
-  notifications = [];
-  saveNotifications();
-} 
+};

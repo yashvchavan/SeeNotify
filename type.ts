@@ -1,47 +1,33 @@
-// Central type definitions for the app
-import type { LucideIcon } from "lucide-react-native"
-import type { RouteProp } from "@react-navigation/native"
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack"
-import { ComponentType } from "react"
-
-// Define the notification type
-export type Notification = {
-  id: string
-  app: string
-  sender: string
-  title: string
-  message: string
-  time: string
-  category: string
-  isRead: boolean
-  icon: ComponentType<any>
-  receivedAt?: Date
-}
-
-// Define the navigation param list
+import { NavigationProp as RNNavigationProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RouteProp } from '@react-navigation/native';
+// Define the app's navigation routes
 export type RootStackParamList = {
-    DashboardMain: undefined
-    NotificationDetail: { notification: Notification }
-    AISettings: undefined
-    Integration: undefined
-    InsightsMain: undefined
-    SettingsMain: undefined
-    Profile: undefined
-    CategoriesMain: undefined
-    Dashboard: undefined
-    Analytics: undefined
-    Categories: undefined
-    Settings: undefined
-    Main: undefined
-    SplashScreen: undefined;
-    OnboardingScreen: undefined;
-    AuthScreen: undefined;
-    MainNavigator: undefined;
+  Dashboard: undefined;
+  NotificationDetail: { notification: Notification };
+  Settings: undefined;
+  AISettings: undefined;
+  Integration: undefined;
+};
+
+// Navigation prop type
+export type NavigationProp = RNNavigationProp<RootStackParamList>;
+
+// Notification type
+export interface Notification {
+  id: string;
+  app: string;
+  sender: string;
+  message: string;
+  time: string;
+  title: string;
+  category: string;
+  isRead: boolean;
+  packageName?: string;
+  icon: "Bell" | "AlertCircle" | "Calendar" | "MessageSquare" | "Tag";
 }
 
 // Navigation prop types
-export type NavigationProp = NativeStackNavigationProp<RootStackParamList>
 
 // Route prop types
 export type NotificationDetailRouteProp = RouteProp<RootStackParamList, "NotificationDetail">
-

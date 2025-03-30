@@ -53,10 +53,11 @@ const NavigationRoot = () => {
       
       try {
         // Check if user has seen onboarding
-        const onboardingCompleted = await AsyncStorage.getItem('hasSeenOnboarding');
-        if (onboardingCompleted === 'true') {
-          setHasSeenOnboarding(true);
-        }
+        // const onboardingCompleted = await AsyncStorage.getItem('hasSeenOnboarding');
+        // if (onboardingCompleted === 'true') {
+        //   setHasSeenOnboarding(true);
+        // }
+        <OnboardingScreen onComplete={handleOnboardingComplete} />
         
         // Initialize notification system in the background
         setupNotificationListener().then(success => {
