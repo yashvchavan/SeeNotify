@@ -1,0 +1,60 @@
+# Node.js / NPM
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Build
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Cache
+.cache/
+.turbo/
+
+# Debug logs
+*.log
+logs/
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Optional (for Create React App)
+.eslintcache
+.report
+
+# Android build files
+**/android/**/Debug/
+**/android/**/Release/
+**/build/
+*.apk
+*.aab
+*.keystore
+.gradle/
+**/local.properties
+**/android_grade_build*.json
+**/build_file_index.txt
+**/ninja_*
+**/additional_project_files.txt
