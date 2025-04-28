@@ -1,0 +1,40 @@
+# Compiled Python files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Environments
+.env
+.venv/
+venv/
+env/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+*.exe
+
+# Database files
+*.sqlite3
+*.db
+
+# Logs
+*.log
+logs/
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS-generated files
+.DS_Store
+Thumbs.db
