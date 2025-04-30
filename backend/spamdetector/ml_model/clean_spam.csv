@@ -1,0 +1,12 @@
+import pandas as pd
+
+# Read the messy file
+df = pd.read_csv('spam.csv', encoding='latin-1', header=None)
+df = df[[0,1]]  # Keep only first two columns
+df.columns = ['label', 'text']
+
+# Clean special characters
+df['text'] = df['text'].str.replace(r'[^\x00-\x7F]+', '', regex=True)
+
+# Save cleaned version
+df.to_csv('clean_spam.csv', index=False)

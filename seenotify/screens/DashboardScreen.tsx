@@ -9,7 +9,7 @@ import { Search, Bell, Mail, MessageSquare, Calendar, AlertCircle, Tag, Trash2, 
 import { Swipeable } from "react-native-gesture-handler"
 import type { NavigationProp, Notification } from "../type"
 
-import { sendNotificationToBackend } from '../services/notificationService';
+import { sendNotificationToBackend,getSpamNotifications, classifyNotification } from '../services/notificationService';
 const { width } = Dimensions.get("window")
 const { NotificationModule } = NativeModules
 const notificationEventEmitter = new NativeEventEmitter(NotificationModule)
@@ -30,7 +30,8 @@ const categories = [
   { id: "social", name: "Social", icon: MessageSquare },
   { id: "promo", name: "Promotions", icon: Tag },
   { id: "other", name: "Other", icon: AlertCircle },
-]
+  { id: "spam", name: "Spam", icon: AlertCircle }, // New category
+];
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
 
@@ -194,8 +195,14 @@ const DashboardScreen = () => {
     };
   
     try {
-      // Send to backend
+      // Classify the notification first
+      const classification = await classifyNotification(newNotification);
+      newNotification.isSpam = classification.is_spam;
+      newNotification.confidence = classification.confidence;
+  
+      // Send to your main backend
       await sendNotificationToBackend(newNotification);
+      
       // Add to local state
       addNotification(newNotification);
     } catch (error) {
@@ -204,6 +211,32 @@ const DashboardScreen = () => {
       addNotification(newNotification);
     }
   };
+  useEffect(() => {
+    const loadSpamNotifications = async () => {
+      try {
+        const spamNotifications = await getSpamNotifications();
+        const mappedNotifications = spamNotifications.map((item: any) => ({
+          id: item.id,
+          app: item.app || 'Unknown',
+          sender: item.sender || 'Unknown',
+          title: item.title || 'Notification',
+          message: item.message || '',
+          time: formatTime(new Date(item.timestamp).getTime()),
+          category: item.is_spam ? 'spam' : getCategory(item.app),
+          isRead: false,
+          icon: getAppIcon(item.app),
+          isSpam: item.is_spam,
+          confidence: item.confidence
+        }));
+        
+        setNotifications(prev => [...mappedNotifications, ...prev]);
+      } catch (error) {
+        console.error('Error loading spam notifications:', error);
+      }
+    };
+  
+    loadSpamNotifications();
+  }, []);
 
   const handleRemovedNotification = (realNotif: RealNotification) => {
     setNotifications(prev => 
@@ -266,24 +299,28 @@ const DashboardScreen = () => {
   }
 
   const filteredNotifications = React.useMemo(() => {
-    let filtered = notifications
-
+    let filtered = notifications;
+  
     if (selectedCategory !== "all") {
-      filtered = filtered.filter((item) => item.category === selectedCategory)
+      if (selectedCategory === "spam") {
+        filtered = filtered.filter((item) => item.isSpam);
+      } else {
+        filtered = filtered.filter((item) => item.category === selectedCategory);
+      }
     }
-
+  
     if (searchQuery) {
-      const query = searchQuery.toLowerCase()
+      const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (item) =>
           item.title.toLowerCase().includes(query) ||
           item.message.toLowerCase().includes(query) ||
           item.sender.toLowerCase().includes(query),
-      )
+      );
     }
-
-    return filtered
-  }, [notifications, selectedCategory, searchQuery])
+  
+    return filtered;
+  }, [notifications, selectedCategory, searchQuery]);
 
   const markAsRead = useCallback((id: string) => {
     setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, isRead: true } : item)))
@@ -327,11 +364,18 @@ const DashboardScreen = () => {
 
   const renderNotificationItem = useCallback(
     ({ item, index }: { item: Notification; index: number }) => {
-      const Icon = item.icon
-      const getTextColor = () => (isDark ? "#ffffff" : "#1e293b")
-      const getSecondaryTextColor = () => (isDark ? "#a1a1aa" : "#64748b")
-      const getCardBgColor = () => (isDark ? "#1e1e2e" : "#ffffff")
-      const getCardBorderColor = () => (isDark ? "#2e2e3e" : "#f1f5f9")
+      const Icon = item.icon;
+      const getTextColor = () => (isDark ? "#ffffff" : "#1e293b");
+      const getSecondaryTextColor = () => (isDark ? "#a1a1aa" : "#64748b");
+      const getCardBgColor = () => (isDark ? "#1e1e2e" : "#ffffff");
+      const getCardBorderColor = () => (isDark ? "#2e2e3e" : "#f1f5f9");
+      
+      // Additional styling for spam notifications
+      const spamStyles = item.isSpam ? {
+        backgroundColor: isDark ? "#2a1a1a" : "#ffebee",
+        borderColor: isDark ? "#3a2a2a" : "#ffcdd2",
+      } : {};
+  
       return (
         <Animated.View entering={FadeIn.delay(index * 100)} exiting={FadeOut} layout={Layout.springify()}>
           <Swipeable
@@ -353,27 +397,37 @@ const DashboardScreen = () => {
                     borderColor: getCardBorderColor(),
                     opacity: item.isRead ? 0.8 : 1,
                   },
+                  spamStyles,
                 ]}
               >
                 <View style={[styles.iconContainer, { backgroundColor: isDark ? "#2e2e3e" : "#f8fafc" }]}>
                   <Icon size={20} color={isDark ? "#6366f1" : "#4f46e5"} />
                 </View>
-
+  
                 <View style={styles.notificationContent}>
                   <View style={styles.notificationHeader}>
                     <Text style={[styles.appName, { color: isDark ? "#6366f1" : "#4f46e5" }]}>{item.app}</Text>
                     <Text style={[styles.time, { color: getSecondaryTextColor() }]}>{item.time}</Text>
                   </View>
-
+  
                   <Text style={[styles.sender, { color: getTextColor() }, item.isRead ? {} : { fontWeight: "700" }]}>
                     {item.sender}
                   </Text>
-
+  
                   <Text style={[styles.message, { color: getSecondaryTextColor() }]} numberOfLines={2}>
                     {item.message}
                   </Text>
+  
+                  {/* Add spam classification info */}
+                  {item.isSpam !== undefined && (
+                    <Text style={[styles.classification, { 
+                      color: item.isSpam ? (isDark ? "#f87171" : "#ef4444") : (isDark ? "#86efac" : "#22c55e")
+                    }]}>
+                      {item.isSpam ? 'SPAM' : 'Legitimate'}{item.confidence ? ` (${Math.round(item.confidence * 100)}%)` : ''}
+                    </Text>
+                  )}
                 </View>
-
+  
                 {!item.isRead && <View style={styles.unreadIndicator} />}
               </View>
             </TouchableOpacity>
@@ -382,7 +436,8 @@ const DashboardScreen = () => {
       )
     },
     [isDark, navigation, renderSwipeActions],
-  )
+  );
+  
 
   const renderCategoryItem = useCallback(
     ({ item }: { item: (typeof categories)[0] }) => {
@@ -489,6 +544,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: 20,
+  },
+  classification: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginTop: 4,
   },
   header: {
     flexDirection: "row",

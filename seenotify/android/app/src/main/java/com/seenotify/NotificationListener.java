@@ -56,7 +56,11 @@ public class NotificationListener extends NotificationListenerService {
             Log.d(TAG, "Skipped hotspot notification");
             return;
         }
-
+        if ("android".equals(sbn.getPackageName()) 
+                && "TetherNotification".equals(sbn.getNotification().getChannelId())
+                && sbn.getNotification().extras.getString("android.title", "").contains("mobile data hotspot")) {
+            return;
+        }
         Log.d(TAG, "Notification posted from: " + sbn.getPackageName());
         sendNotificationEvent("notificationPosted", convertNotification(sbn));
     }

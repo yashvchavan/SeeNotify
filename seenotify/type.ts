@@ -14,6 +14,8 @@ export type Notification = {
   category: string
   isRead: boolean
   icon: LucideIcon
+  isSpam?: boolean;          // New field
+  confidence?: number;
 }
 
 // Define the navigation param list
