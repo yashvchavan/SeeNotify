@@ -184,10 +184,11 @@ const DashboardScreen = () => {
   const handleNewNotification = async (realNotif: RealNotification) => {
     const newNotification: Notification = {
       id: `${realNotif.packageName}:${realNotif.id}:${realNotif.tag || ''}:${realNotif.postTime}`,
+      packageName: realNotif.packageName,
       app: getAppName(realNotif.packageName),
       sender: realNotif.title || 'Unknown',
       title: realNotif.subText || 'Notification',
-      message: realNotif.text || '',
+      message: realNotif.text || 'No Mentioned',
       time: formatTime(realNotif.postTime),
       category: getCategory(realNotif.packageName),
       isRead: false,
@@ -250,11 +251,12 @@ const DashboardScreen = () => {
       app: getAppName(realNotif.packageName),
       sender: realNotif.title || 'Unknown',
       title: realNotif.subText || 'Notification',
-      message: realNotif.text || '',
+      message: realNotif.text || 'No Mentioned',
       time: formatTime(realNotif.postTime),
       category: getCategory(realNotif.packageName),
       isRead: false,
-      icon: getAppIcon(realNotif.packageName)
+      icon: getAppIcon(realNotif.packageName),
+      packageName: realNotif.packageName,
     }))
 
     setNotifications(prev => {

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect } from "react"
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Share, Alert } from "react-native"
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Share, Alert, TextInput } from "react-native"
 import { useNavigation, useRoute } from "@react-navigation/native"
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, FadeIn, SlideInUp } from "react-native-reanimated"
 import { useTheme } from "../context/ThemeContext"
@@ -21,6 +21,8 @@ import {
   Undo2,
 } from "lucide-react-native"
 import type { NavigationProp, NotificationDetailRouteProp } from "../type"
+import { NativeModules } from 'react-native';
+const { NotificationModule } = NativeModules;
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
 
@@ -29,6 +31,9 @@ const NotificationDetailScreen = () => {
   const navigation = useNavigation<NavigationProp>()
   const route = useRoute<NotificationDetailRouteProp>()
   const { notification } = route.params || {}
+  const [isMuted, setIsMuted] = React.useState(false);
+  const [showReplyInput, setShowReplyInput] = React.useState(false);
+  const [replyText, setReplyText] = React.useState('');
 
   const [showDeletedMessage, setShowDeletedMessage] = React.useState(false)
   const [isDeleted, setIsDeleted] = React.useState(false)
@@ -67,6 +72,51 @@ const NotificationDetailScreen = () => {
       }, 300)
     }, 5000)
   }
+
+  const handleMute = async () => {
+    try {
+      if (notification.channelId) {
+        await NotificationModule.muteNotification(
+          notification.packageName,
+          notification.channelId
+        );
+        setIsMuted(true);
+        Alert.alert('Success', 'Notifications from this app have been muted');
+      } else {
+        Alert.alert('Error', 'This notification cannot be muted');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to mute notifications');
+      console.error('Mute error:', error);
+    }
+  };
+
+  const handleReply = async () => {
+    if (!showReplyInput) {
+      setShowReplyInput(true);
+      return;
+    }
+  
+    if (!replyText.trim()) {
+      Alert.alert('Error', 'Please enter a reply message');
+      return;
+    }
+  
+    try {
+      await NotificationModule.sendReply(
+        notification.packageName,
+        notification.tag || '',
+        notification.id,
+        replyText
+      );
+      Alert.alert('Success', 'Reply sent successfully');
+      setShowReplyInput(false);
+      setReplyText('');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send reply');
+      console.error('Reply error:', error);
+    }
+  };
 
   const handleUndo = () => {
     setIsDeleted(false)
@@ -192,13 +242,14 @@ const NotificationDetailScreen = () => {
 
               {/* Action Buttons */}
               <View style={styles.actionButtons}>
-                <AnimatedTouchable
-                  style={[styles.actionButton, { backgroundColor: isDark ? "#2e2e3e" : "#f8fafc" }]}
-                  entering={SlideInUp.delay(100)}
-                >
-                  <MessageSquare size={20} color={isDark ? "#6366f1" : "#4f46e5"} />
-                  <Text style={[styles.actionText, { color: getTextColor() }]}>Reply</Text>
-                </AnimatedTouchable>
+              <AnimatedTouchable
+                style={[styles.actionButton, { backgroundColor: isDark ? "#2e2e3e" : "#f8fafc" }]}
+                entering={SlideInUp.delay(100)}
+                onPress={handleReply}
+              >
+                <MessageSquare size={20} color={isDark ? "#6366f1" : "#4f46e5"} />
+                <Text style={[styles.actionText, { color: getTextColor() }]}>Reply</Text>
+              </AnimatedTouchable>
 
                 <AnimatedTouchable
                   style={[styles.actionButton, { backgroundColor: isDark ? "#2e2e3e" : "#f8fafc" }]}
@@ -211,9 +262,12 @@ const NotificationDetailScreen = () => {
                 <AnimatedTouchable
                   style={[styles.actionButton, { backgroundColor: isDark ? "#2e2e3e" : "#f8fafc" }]}
                   entering={SlideInUp.delay(300)}
+                  onPress={handleMute}
                 >
-                  <VolumeX size={20} color={isDark ? "#6366f1" : "#4f46e5"} />
-                  <Text style={[styles.actionText, { color: getTextColor() }]}>Mute</Text>
+                  <VolumeX size={20} color={isMuted ? "#ef4444" : (isDark ? "#6366f1" : "#4f46e5")} />
+                  <Text style={[styles.actionText, { color: isMuted ? "#ef4444" : getTextColor() }]}>
+                    {isMuted ? 'Muted' : 'Mute'}
+                  </Text>
                 </AnimatedTouchable>
 
                 <AnimatedTouchable
@@ -225,7 +279,24 @@ const NotificationDetailScreen = () => {
                   <Text style={[styles.actionText, { color: "#ef4444" }]}>Delete</Text>
                 </AnimatedTouchable>
               </View>
-
+              {showReplyInput && (
+                <View style={[styles.replyContainer, { backgroundColor: isDark ? "#2e2e3e" : "#f8fafc" }]}>
+                  <TextInput
+                    style={[styles.replyInput, { color: getTextColor(), borderColor: getCardBorderColor() }]}
+                    placeholder="Type your reply..."
+                    placeholderTextColor={getSecondaryTextColor()}
+                    value={replyText}
+                    onChangeText={setReplyText}
+                    multiline
+                  />
+                  <TouchableOpacity 
+                    style={styles.sendButton}
+                    onPress={handleReply}
+                  >
+                    <Text style={[styles.sendButtonText, { color: isDark ? "#6366f1" : "#4f46e5" }]}>Send</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
               {/* Secondary Actions */}
               <View style={styles.secondaryActions}>
                 <TouchableOpacity style={styles.secondaryAction} onPress={handleCopy}>
@@ -469,6 +540,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     marginLeft: 4,
+  },
+  replyContainer: {
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  replyInput: {
+    flex: 1,
+    minHeight: 40,
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  sendButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  sendButtonText: {
+    fontWeight: '600',
   },
 })
 

@@ -16,6 +16,9 @@ export type Notification = {
   icon: LucideIcon
   isSpam?: boolean;          // New field
   confidence?: number;
+  packageName: string;
+  channelId?: string;
+  tag?: string;
 }
 
 // Define the navigation param list
