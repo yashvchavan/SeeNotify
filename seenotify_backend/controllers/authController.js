@@ -69,3 +69,26 @@ exports.logout = (req, res) => {
     res.json({ message: 'Logout successful' });
   });
 };
+
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const { email, newPassword } = req.body;
+    
+    if (!email || !newPassword) {
+      return res.status(400).json({ message: 'Email and new password are required' });
+    }
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Update password
+    user.password = newPassword;
+    await user.save();
+    
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -23,5 +23,13 @@ router.post(
 
 router.get('/check-auth', authController.checkAuth);
 router.post('/logout', authController.logout);
+router.post(
+  '/forgot-password',
+  [
+    check('email').isEmail().normalizeEmail(),
+    check('newPassword').isLength({ min: 6 })
+  ],
+  authController.forgotPassword
+);
 
 module.exports = router;
