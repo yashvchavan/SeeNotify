@@ -2,27 +2,21 @@
 
 import React, { useRef, useCallback, useEffect, useState } from "react"
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Dimensions, NativeEventEmitter, NativeModules, EmitterSubscription } from "react-native"
-import { useNavigation } from "@react-navigation/native"
+import { useNavigation, useRoute } from "@react-navigation/native"
+import type { RouteProp } from "@react-navigation/native"
 import Animated, { FadeIn, FadeOut, SlideInRight, Layout } from "react-native-reanimated"
 import { useTheme } from "../context/ThemeContext"
-import { Search, Bell, Mail, MessageSquare, Calendar, AlertCircle, Tag, Trash2, Sliders, Link, CheckCircle2, LucideIcon } from "lucide-react-native"
+import { Search, Bell, Mail, MessageSquare, Calendar, AlertCircle, Tag, Trash2, Sliders, Link, CheckCircle2, ArrowLeft, LucideIcon } from "lucide-react-native"
 import { Swipeable } from "react-native-gesture-handler"
-import type { NavigationProp, Notification } from "../type"
+import type { NavigationProp, Notification, RealNotification } from "../type"
+import type { RootStackParamList } from "../navigation/types.tsx"
+import { sendNotificationToBackend, getSpamNotifications, classifyNotification } from '../services/notificationService'
 
-import { sendNotificationToBackend,getSpamNotifications, classifyNotification } from '../services/notificationService';
 const { width } = Dimensions.get("window")
 const { NotificationModule } = NativeModules
 const notificationEventEmitter = new NativeEventEmitter(NotificationModule)
 
-interface RealNotification {
-  id: string
-  packageName: string
-  title: string
-  text: string
-  postTime: number
-  tag?: string
-  subText?: string
-}
+type DashboardScreenRouteProp = RouteProp<RootStackParamList, 'Dashboard'>
 
 const categories = [
   { id: "all", name: "All", icon: Bell },
@@ -30,8 +24,8 @@ const categories = [
   { id: "social", name: "Social", icon: MessageSquare },
   { id: "promo", name: "Promotions", icon: Tag },
   { id: "other", name: "Other", icon: AlertCircle },
-  { id: "spam", name: "Spam", icon: AlertCircle }, // New category
-];
+  { id: "spam", name: "Spam", icon: AlertCircle },
+]
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
 
@@ -43,10 +37,13 @@ const formatTime = (timestamp: number): string => {
 const DashboardScreen = () => {
   const { isDark } = useTheme()
   const navigation = useNavigation<NavigationProp>()
+  const route = useRoute<DashboardScreenRouteProp>()
   const [selectedCategory, setSelectedCategory] = useState("all")
+  const [selectedApp, setSelectedApp] = useState<string | null>(null)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [hasPermission, setHasPermission] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const swipeableRefs = useRef<Array<Swipeable | null>>([])
 
@@ -84,18 +81,20 @@ const DashboardScreen = () => {
   
     checkPermissions();
   }, []);
-
-  // Update your useEffect in DashboardScreen
   useEffect(() => {
+    // Check permission on mount
+    checkPermission();
+
+    // Set up event listeners
     const subscriptions: EmitterSubscription[] = [];
 
-    // Check if emitter is properly connected
+    // Debug logging
     console.log('NotificationModule:', NotificationModule);
     console.log('notificationEventEmitter:', notificationEventEmitter);
 
     const postSub = notificationEventEmitter.addListener(
       'notificationPosted',
-      (notification) => {
+      (notification: RealNotification) => {
         console.log('Received notificationPosted:', notification);
         handleNewNotification(notification);
       }
@@ -104,7 +103,7 @@ const DashboardScreen = () => {
 
     const removeSub = notificationEventEmitter.addListener(
       'notificationRemoved',
-      (notification) => {
+      (notification: RealNotification) => {
         console.log('Received notificationRemoved:', notification);
         handleRemovedNotification(notification);
       }
@@ -113,50 +112,16 @@ const DashboardScreen = () => {
 
     const activeSub = notificationEventEmitter.addListener(
       'activeNotifications',
-      (data) => {
+      (data: { notifications: RealNotification[] }) => {
         console.log('Received activeNotifications:', data);
         handleActiveNotifications(data.notifications);
       }
     );
     subscriptions.push(activeSub);
 
-
     return () => {
       subscriptions.forEach(sub => sub.remove());
     };
-  }, []);
-
-  useEffect(() => {
-    // Check permission on mount
-    checkPermission()
-
-    // Set up event listeners
-    const subscriptionPost = notificationEventEmitter.addListener(
-      'notificationPosted',
-      (notification: RealNotification) => {
-        handleNewNotification(notification)
-      }
-    )
-
-    const subscriptionRemove = notificationEventEmitter.addListener(
-      'notificationRemoved',
-      (notification: RealNotification) => {
-        handleRemovedNotification(notification)
-      }
-    )
-
-    const subscriptionActive = notificationEventEmitter.addListener(
-      'activeNotifications',
-      (data: { notifications: RealNotification[] }) => {
-        handleActiveNotifications(data.notifications)
-      }
-    )
-
-    return () => {
-      subscriptionPost.remove()
-      subscriptionRemove.remove()
-      subscriptionActive.remove()
-    }
   }, [])
 
   const checkPermission = async () => {
@@ -268,8 +233,6 @@ const DashboardScreen = () => {
     })
   }
 
-  // ... rest of your component code remains the same ...
-
   const getAppName = (packageName: string): string => {
     const appMap: Record<string, string> = {
       'com.whatsapp': 'WhatsApp',
@@ -293,24 +256,115 @@ const DashboardScreen = () => {
   }
 
   const getCategory = (packageName: string): string => {
-    if (packageName.includes('mail') || packageName.includes('gmail')) return 'work'
-    if (packageName.includes('whatsapp') || packageName.includes('messaging')) return 'social'
-    if (packageName.includes('slack')) return 'work'
-    if (packageName.includes('shopping') || packageName.includes('amazon')) return 'promo'
-    return 'other'
+    // Communication and Email apps
+    if (packageName.includes('gmail') || packageName.includes('mail') || packageName.includes('outlook')) {
+      return 'work';
+    }
+    
+    // Social Media and Messaging apps
+    if (packageName.includes('whatsapp') || 
+        packageName.includes('telegram') || 
+        packageName.includes('messaging') ||
+        packageName.includes('instagram') ||
+        packageName.includes('twitter') ||
+        packageName.includes('facebook') ||
+        packageName.includes('messenger') ||
+        packageName.includes('discord')) {
+      return 'social';
+    }
+
+    // Work/Professional apps
+    if (packageName.includes('slack') || 
+        packageName.includes('teams') || 
+        packageName.includes('linkedin') ||
+        packageName.includes('jira') ||
+        packageName.includes('zoom')) {
+      return 'work';
+    }
+
+    // Shopping and Promotional apps
+    if (packageName.includes('shopping') || 
+        packageName.includes('amazon') || 
+        packageName.includes('aliexpress') ||
+        packageName.includes('ebay') ||
+        packageName.includes('promo')) {
+      return 'promo';
+    }
+
+    // Check if notification is marked as spam
+    const notification = notifications.find(n => n.packageName === packageName);
+    if (notification?.isSpam) {
+      return 'spam';
+    }
+
+    return 'other';
   }
 
+  useEffect(() => {
+    if (route.params?.filter) {
+      setSelectedApp(route.params.filter.packageName);
+    }
+  }, [route.params]);
   const filteredNotifications = React.useMemo(() => {
-    let filtered = notifications;
+    let filtered = [...notifications];
   
-    if (selectedCategory !== "all") {
+    // First apply app filter if selected
+    if (selectedApp) {
+      filtered = filtered.filter((item) => item.packageName === selectedApp);
+    }
+    // Then apply category filter if no app is selected
+    else if (selectedCategory !== "all") {
       if (selectedCategory === "spam") {
+        // For spam category, show all items marked as spam
         filtered = filtered.filter((item) => item.isSpam);
+      } else if (selectedCategory === "social") {
+        // For social category, show all social app notifications
+        filtered = filtered.filter((item) => {
+          if (!item?.packageName) return false;
+          const packageName = item.packageName.toLowerCase();
+          return (
+            packageName.includes("whatsapp") ||
+            packageName.includes("telegram") ||
+            packageName.includes("messenger") ||
+            packageName.includes("instagram") ||
+            packageName.includes("twitter") ||
+            packageName.includes("facebook") ||
+            packageName.includes("discord")
+          );
+        });      } else if (selectedCategory === "work") {
+        // For work category, show email and work app notifications
+        filtered = filtered.filter((item) => {
+          if (!item?.packageName) return false;
+          const packageName = item.packageName.toLowerCase();
+          return (
+            packageName.includes("gmail") ||
+            packageName.includes("outlook") ||
+            packageName.includes("slack") ||
+            packageName.includes("teams") ||
+            packageName.includes("linkedin") ||
+            packageName.includes("jira")
+          );
+        });
+      } else if (selectedCategory === "promo") {
+        // For promo category, show shopping and promotional notifications
+        filtered = filtered.filter((item) =>{
+          if (!item?.packageName) return false;
+          const packageName = item.packageName.toLowerCase();
+          return (
+          packageName.includes("shopping") ||
+          packageName.includes("amazon") ||
+          packageName.includes("aliexpress") ||
+          packageName.includes("ebay") ||
+          packageName.includes("promo")
+        );
+      });
       } else {
-        filtered = filtered.filter((item) => item.category === selectedCategory);
+        // For other category, show everything not matching other categories
+        filtered = filtered.filter((item) => item.category === "other");
       }
     }
   
+    // Finally apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -320,9 +374,8 @@ const DashboardScreen = () => {
           item.sender.toLowerCase().includes(query),
       );
     }
-  
     return filtered;
-  }, [notifications, selectedCategory, searchQuery]);
+  }, [notifications, selectedCategory, selectedApp, searchQuery, getCategory]);
 
   const markAsRead = useCallback((id: string) => {
     setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, isRead: true } : item)))
@@ -477,10 +530,58 @@ const DashboardScreen = () => {
   const getTextColor = () => (isDark ? "#ffffff" : "#1e293b")
   const getSecondaryTextColor = () => (isDark ? "#a1a1aa" : "#64748b")
 
+  const clearAppFilter = () => {
+    setSelectedApp(null);
+    navigation.setParams({ filter: undefined });
+  };
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      // This will trigger the activeNotifications event through the listener
+      await NotificationModule.getActiveNotifications()
+      
+      // Get spam notifications
+      const spamNotifications = await getSpamNotifications()
+      const mappedNotifications = spamNotifications.map((item: any) => ({
+        id: item.id,
+        app: item.app || 'Unknown',
+        sender: item.sender || 'Unknown',
+        title: item.title || 'Notification',
+        message: item.message || '',
+        time: formatTime(new Date(item.timestamp).getTime()),
+        category: item.is_spam ? 'spam' : getCategory(item.app),
+        isRead: false,
+        icon: getAppIcon(item.app),
+        isSpam: item.is_spam,
+        confidence: item.confidence
+      }))
+      
+      // The active notifications will be handled by the event listener
+      // We'll only update spam notifications here
+      setNotifications(prev => {
+        // Filter out spam notifications and add new ones
+        const nonSpam = prev.filter(n => !n.isSpam);
+        return [...nonSpam, ...mappedNotifications];
+      })
+    } catch (error) {
+      console.error('Error refreshing notifications:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [])
+
   return (
     <View style={[styles.container, { backgroundColor: isDark ? "#121212" : "#f8fafc" }]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: getTextColor() }]}>Notifications</Text>
+        {selectedApp ? (
+          <TouchableOpacity onPress={clearAppFilter} style={styles.backButton}>
+            <ArrowLeft size={24} color={getTextColor()} />
+          </TouchableOpacity>
+        ) : null}
+        <Text style={[styles.title, { color: getTextColor() }]}>
+          {selectedApp ? route.params?.filter?.appName || 'App Notifications' : 'Notifications'}
+        </Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.headerButton} onPress={() => navigation.navigate("AISettings")}>
             <Sliders size={20} color={getTextColor()} />
@@ -514,16 +615,18 @@ const DashboardScreen = () => {
         />
       </View>
 
-      <View style={styles.categoriesContainer}>
-        <FlatList
-          data={categories}
-          renderItem={renderCategoryItem}
-          keyExtractor={(item) => item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoriesList}
-        />
-      </View>
+      {!selectedApp && (
+        <View style={styles.categoriesContainer}>
+          <FlatList
+            data={categories}
+            renderItem={renderCategoryItem}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoriesList}
+          />
+        </View>
+      )}
 
       <FlatList
         data={filteredNotifications}
@@ -531,6 +634,8 @@ const DashboardScreen = () => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.notificationsList}
         showsVerticalScrollIndicator={false}
+        refreshing={isRefreshing}
+        onRefresh={handleRefresh}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Bell size={60} color={isDark ? "#2e2e3e" : "#e2e8f0"} />
@@ -697,6 +802,12 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: 16,
     fontSize: 16,
+  },
+  backButton: {
+    position: "absolute",
+    left: 20,
+    top: 20,
+    zIndex: 1,
   },
 })
 

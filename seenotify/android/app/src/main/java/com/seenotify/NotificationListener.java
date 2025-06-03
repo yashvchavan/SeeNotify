@@ -172,12 +172,38 @@ public class NotificationListener extends NotificationListenerService {
             Log.e(TAG, "Error sending reply", e);
         }
     }
-
-
     private boolean shouldSkipNotification(StatusBarNotification sbn) {
-        // Skip muted notifications
-
-        return false;
+        String packageName = sbn.getPackageName();
+        
+        // List of allowed package names
+        String[] allowedPackages = {
+            "com.whatsapp",           // WhatsApp
+            "com.google.android.gm",  // Gmail
+            "com.instagram.android",  // Instagram
+            "com.twitter.android",    // X (Twitter)
+            "com.linkedin.android",   // LinkedIn
+            "com.facebook.katana",    // Facebook
+            "com.facebook.orca",      // Facebook Messenger
+            "com.snapchat.android",   // Snapchat
+            "com.microsoft.teams",    // Microsoft Teams
+            "com.slack"              // Slack
+        };
+        
+        // Check if the notification is from Android system or mobile hotspot
+        if (packageName.equals("android") || 
+            (sbn.getNotification() != null && 
+             sbn.getNotification().extras.getString("android.title", "").toLowerCase().contains("hotspot"))) {
+            return true;  // Skip these notifications
+        }
+        
+        // Check if the package is in our allowed list
+        for (String allowedPackage : allowedPackages) {
+            if (packageName.equals(allowedPackage)) {
+                return false;  // Don't skip these notifications
+            }
+        }
+        
+        return true;  // Skip all other notifications
     }
 
     private WritableMap convertNotification(StatusBarNotification sbn) {

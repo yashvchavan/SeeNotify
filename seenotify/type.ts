@@ -3,6 +3,20 @@ import type { LucideIcon } from "lucide-react-native"
 import type { RouteProp } from "@react-navigation/native"
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack"
 
+// Define the real notification type from Android
+export interface RealNotification {
+  id: string
+  packageName: string
+  title: string
+  text: string
+  postTime: number
+  tag?: string
+  subText?: string
+  channelId?: string
+  isSystem?: boolean
+  importance?: number
+}
+
 // Define the notification type
 export type Notification = {
   id: string

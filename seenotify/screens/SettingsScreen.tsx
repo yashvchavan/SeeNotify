@@ -258,13 +258,13 @@ const SettingsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingTop: 20,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 60,
     paddingBottom: 20,
   },
   headerLeft: {
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: "600",
   },
   headerRight: {
