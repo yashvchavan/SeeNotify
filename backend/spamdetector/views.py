@@ -7,6 +7,8 @@ from django.template.defaultfilters import timesince
 from datetime import datetime
 import pytz
 from bson import ObjectId
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 
 class NotificationListView(APIView):
     FOOD_SPAM_KEYWORDS = ['food', 'delivery', 'discount', 'offer']
@@ -121,3 +123,7 @@ def get_notification_detail(request, notification_id):
         return Response(response_data)
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+@csrf_exempt
+def health_check(request):
+    return JsonResponse({"status": "ok"})
