@@ -65,7 +65,7 @@ INSTALLED_APPS = [
     'spamdetector',
     'corsheaders',
 ]
-ALLOWED_HOSTS = ['192.168.186.202', 'localhost', '10.0.2.2', '127.0.0.1']
+ALLOWED_HOSTS = ['192.168.75.118', 'localhost', '10.0.2.2', '127.0.0.1']
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -143,7 +143,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8081",
-    "http://192.168.186.202:8081",
+    "http://192.168.75.118:8081",
     "http://10.0.2.2:8081",
 ]
 # Static files (CSS, JavaScript, Images)

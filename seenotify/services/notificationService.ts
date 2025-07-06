@@ -4,7 +4,7 @@ import axios from 'axios';
 // For your existing notification service
 export const sendNotificationToBackend = async (notification: Notification) => {
   try {
-    const response = await fetch('http://192.168.186.202:5000/api/notifications', {
+    const response = await fetch('http://192.168.75.118:5000/api/notifications', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -36,7 +36,7 @@ export const sendNotificationToBackend = async (notification: Notification) => {
 
 // New functions for spam detection
 const spamDetectionApi = axios.create({
-  baseURL: 'http://192.168.186.202:8000/api',
+  baseURL: 'http://192.168.75.118:8000/api',
   timeout: 10000,
   headers: {
     'Accept': 'application/json',

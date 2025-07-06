@@ -89,7 +89,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
   const handleAuth = async () => {
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-      const response = await fetch(`http://192.168.186.202:5000${endpoint}`, {
+      const response = await fetch(`http://192.168.75.118:5000${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -113,7 +113,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
 
   const handleForgotPassword = async () => {
     try {
-      const response = await fetch('http://192.168.186.202:5000/api/auth/forgot-password', {
+      const response = await fetch('http://192.168.75.118:5000/api/auth/forgot-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

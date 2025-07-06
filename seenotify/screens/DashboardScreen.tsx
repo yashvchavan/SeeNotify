@@ -50,19 +50,40 @@ const DashboardScreen = () => {
   // Improved notification handling with deduplication
   const addNotification = useCallback((newNotif: Notification) => {
     setNotifications(prev => {
-      // Check if notification already exists
-      const exists = prev.some(existing => 
-        existing.id === newNotif.id || 
-        (existing.app === newNotif.app && 
-         existing.message === newNotif.message &&
-         Math.abs(new Date(existing.time).getTime() - new Date(newNotif.time).getTime()) < 60000)
-      );
+      // Enhanced duplicate detection
+      const isDuplicate = prev.some(existing => {
+        // Check for exact ID match first
+        if (existing.id === newNotif.id) return true;
+        
+        // If we have exact timestamps, parse them
+        const existingTime = typeof existing.time === 'string' ? 
+          new Date(existing.time).getTime() : 
+          new Date().getTime();
+        const newTime = typeof newNotif.time === 'string' ? 
+          new Date(newNotif.time).getTime() : 
+          new Date().getTime();
+        
+        const timeDiff = Math.abs(existingTime - newTime);
+        
+        // Consider notifications duplicate if they have:
+        // 1. Same app and similar content within 1 minute
+        // 2. Exact same message content from same sender within 5 minutes
+        return (
+          (existing.app === newNotif.app &&
+           existing.message === newNotif.message &&
+           timeDiff < 60000) || // 1 minute
+          (existing.sender === newNotif.sender &&
+           existing.message === newNotif.message &&
+           timeDiff < 300000) // 5 minutes
+        );
+      });
 
-      if (!exists) {
-        return [newNotif, ...prev]
+      if (!isDuplicate) {
+        // Add new notification at the beginning of the array
+        return [newNotif, ...prev];
       }
-      return prev
-    })
+      return prev;
+    });
   }, [])
 
   useEffect(() => {
@@ -147,6 +168,9 @@ const DashboardScreen = () => {
 
 
   const handleNewNotification = async (realNotif: RealNotification) => {
+    // Create a timestamp string in the correct format
+    const timestamp = formatTime(realNotif.postTime);
+    
     const newNotification: Notification = {
       id: `${realNotif.packageName}:${realNotif.id}:${realNotif.tag || ''}:${realNotif.postTime}`,
       packageName: realNotif.packageName,
@@ -154,7 +178,7 @@ const DashboardScreen = () => {
       sender: realNotif.title || 'Unknown',
       title: realNotif.subText || 'Notification',
       message: realNotif.text || 'No Mentioned',
-      time: formatTime(realNotif.postTime),
+      time: timestamp,
       category: getCategory(realNotif.packageName),
       isRead: false,
       icon: getAppIcon(realNotif.packageName)
@@ -169,7 +193,7 @@ const DashboardScreen = () => {
       // Send to your main backend
       await sendNotificationToBackend(newNotification);
       
-      // Add to local state
+      // Add to local state with deduplication
       addNotification(newNotification);
     } catch (error) {
       console.error('Error handling new notification:', error);
